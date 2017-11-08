@@ -1,0 +1,94 @@
+version: '2'
+services:
+    redis:
+        image: 'redis:3.2.7'
+
+    postgres:
+        image: postgres:9
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        ports:
+            - "5432:5432"
+        # volumes:
+        #   - ./volumes/postgres-data:/var/lib/postgresql/data
+
+    flower:
+        image: ecsazbdpd.azurecr.io/kube-airflow:3
+        restart: always
+        depends_on:
+            - redis
+        environment:
+            - EXECUTOR=Celery
+        ports:
+            - "5555:5555"
+        command: flower        
+            
+
+    # rabbitmq:
+    #   image: bijukunjummen/rabbitmq-server:3.6.10
+    #   hostname: rabbit1
+    #   ports:
+    #     - "5672:5672"
+    #     - "15672:15672"
+    #   environment:
+    #     - RABBITMQ_DEFAULT_USER=airflow
+    #     - RABBITMQ_DEFAULT_PASS=airflow
+
+    webserver:
+        image: ecsazbdpd.azurecr.io/kube-airflow:3
+        restart: always
+        depends_on:
+            - postgres
+            - redis
+            # - rabbitmq
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        volumes:
+            - ./volumes/dags:/usr/local/airflow/dags
+        ports:
+            - "8080:8080"
+        command: webserver
+
+
+
+    scheduler:
+        image: ecsazbdpd.azurecr.io/kube-airflow:3
+        restart: always
+        depends_on:
+            - webserver
+            # - rabbitmq
+            - redis
+        volumes:
+            - ./volumes/dags:/usr/local/airflow/dags
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        command: scheduler
+
+    worker:
+        image: ecsazbdpd.azurecr.io/kube-airflow:3
+        restart: always
+        depends_on:
+            - scheduler
+            - redis
+        volumes:
+            - ./volumes/dags:/usr/local/airflow/dags
+        environment:
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        command: worker
+
